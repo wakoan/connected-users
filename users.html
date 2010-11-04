@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Interactive information about login/logout</title>
+        
+    <script src="/json.js"></script> <!-- for ie -->
+    <script src="/socket.io/socket.io.js"></script>
+  </head>
+  <body>
+    
+    <script>
+
+      var usersPresentations = {};
+
+      function asCurrentUser(user){
+        return '<b>' + user + '(current user)</b>';
+      }
+
+      function addNewUser(user, isCurrentUser){
+        var usersDiv = document.getElementById('users');
+        var newUserId = document.createElement('p');
+        var inlineText = user;
+        if(isCurrentUser){
+          inlineText = asCurrentUser(user);
+        }
+        newUserId.innerHTML = inlineText;
+        usersDiv.appendChild(newUserId);
+        usersPresentations[user] = newUserId;
+        return newUserId;
+      }
+
+      function addLogEntry(message){
+        var logDiv = document.getElementById('log');
+        var newLogEntry = document.createElement('p');
+        newLogEntry.innerHTML = message;
+        logDiv.appendChild(newLogEntry);
+      }
+
+      function removeUser(user){
+        var div = usersPresentations[user];
+        if(div){
+          div.parentNode.removeChild(div);
+          usersPresentations[user] = null;
+        }
+      }
+
+      function renameUser(user, newName){
+        var div = usersPresentations[user];
+        if(div){
+          div.innerHTML = newName;
+        }else{
+          alert(JSON.stringify(usersPresentations));
+        }
+      }
+
+      var socket = new io.Socket(null, {port: 8080, rememberTransport: false});
+      socket.connect();
+      var currentUserId = null;
+      socket.on('message', function(obj) {
+        if('init' == obj.action){
+          currentUserId = obj.currentUser;
+          for(var i in obj.users){
+            var user = obj.users[i];
+            addNewUser(user,user == obj.currentUser );
+          }
+        } else if('connected' == obj.action) {
+          addNewUser(obj.user);
+          addLogEntry( obj.user + ' ' + obj.action);
+        } else if('rename' == obj.action){
+          renameUser(obj.sessionId, obj.newName);
+          addLogEntry(obj.oldName + ' renamed to ' + obj.newName);
+        } else if('disconnected' == obj.action){
+          addLogEntry( obj.login + ' ' + obj.action);
+          removeUser(obj.user);
+        }
+      });
+
+     function login(){
+        var login = document.getElementById('loginName').value;
+        socket.send({action:'login', login:login});
+        var div = usersPresentations[currentUserId];
+        if(div){
+          div.innerHTML = asCurrentUser(login);
+        }
+        addLogEntry('You renamed to ' + login);
+     }
+    </script>
+
+    <form id="loginForm" onsubmit="login(); return false;" >
+      Login:
+      <input id="loginName" type="text"/>
+      <input type="submit" value="set name"/>
+      </form>
+     <div>
+        <h3>Connected users</h3>
+        <div id="users"/>
+     </div>
+     <div> 
+       <h3>Log</h3>
+       <div id="log"/>
+     </div>
+      
+  </body>
+</html>
